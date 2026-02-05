@@ -34,34 +34,34 @@ $(wildcard ../makefile.init) \
 $(wildcard ../makefile.targets) \
 
 
-BUILD_ARTIFACT_NAME := RTC_And_Alarm_With_Interrupt
+BUILD_ARTIFACT_NAME := Childqube_Flight_Software
 BUILD_ARTIFACT_EXTENSION := elf
 BUILD_ARTIFACT_PREFIX :=
 BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
-RTC_And_Alarm_With_Interrupt.elf \
+Childqube_Flight_Software.elf \
 
 MAP_FILES += \
-RTC_And_Alarm_With_Interrupt.map \
+Childqube_Flight_Software.map \
 
 SIZE_OUTPUT += \
 default.size.stdout \
 
 OBJDUMP_LIST += \
-RTC_And_Alarm_With_Interrupt.list \
+Childqube_Flight_Software.list \
 
 
 # All Target
 all: main-build
 
 # Main-build Target
-main-build: RTC_And_Alarm_With_Interrupt.elf secondary-outputs
+main-build: Childqube_Flight_Software.elf secondary-outputs
 
 # Tool invocations
-RTC_And_Alarm_With_Interrupt.elf RTC_And_Alarm_With_Interrupt.map: $(OBJS) $(USER_OBJS) C:\Users\julia\STM32CubeIDE\workspace_1.19.0\RTC_And_Alarm_With_Interrupt\STM32L496ZGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "RTC_And_Alarm_With_Interrupt.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\julia\STM32CubeIDE\workspace_1.19.0\RTC_And_Alarm_With_Interrupt\STM32L496ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="RTC_And_Alarm_With_Interrupt.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Childqube_Flight_Software.elf Childqube_Flight_Software.map: $(OBJS) $(USER_OBJS) C:\Users\julia\STM32CubeIDE\workspace_1.19.0\Childqube_Flight_Software\STM32L496ZGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Childqube_Flight_Software.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\julia\STM32CubeIDE\workspace_1.19.0\Childqube_Flight_Software\STM32L496ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Childqube_Flight_Software.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -70,14 +70,14 @@ default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-RTC_And_Alarm_With_Interrupt.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "RTC_And_Alarm_With_Interrupt.list"
+Childqube_Flight_Software.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "Childqube_Flight_Software.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) RTC_And_Alarm_With_Interrupt.elf RTC_And_Alarm_With_Interrupt.list RTC_And_Alarm_With_Interrupt.map default.size.stdout
+	-$(RM) Childqube_Flight_Software.elf Childqube_Flight_Software.list Childqube_Flight_Software.map default.size.stdout
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
