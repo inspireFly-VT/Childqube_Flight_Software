@@ -60,8 +60,8 @@ all: main-build
 main-build: Childqube_Flight_Software.elf secondary-outputs
 
 # Tool invocations
-Childqube_Flight_Software.elf Childqube_Flight_Software.map: $(OBJS) $(USER_OBJS) C:\Users\julia\STM32CubeIDE\workspace_1.19.0\Childqube_Flight_Software\STM32L496ZGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Childqube_Flight_Software.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\julia\STM32CubeIDE\workspace_1.19.0\Childqube_Flight_Software\STM32L496ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Childqube_Flight_Software.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Childqube_Flight_Software.elf Childqube_Flight_Software.map: $(OBJS) $(USER_OBJS) C:\Users\manma\STM32CubeIDE\workspace_1.19.0\Childqube_Flight_Software\STM32L496ZGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Childqube_Flight_Software.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\manma\STM32CubeIDE\workspace_1.19.0\Childqube_Flight_Software\STM32L496ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Childqube_Flight_Software.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

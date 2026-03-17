@@ -21,22 +21,46 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+typedef struct {
+    float    battery_voltage;
+    float    cpu_temperature;
+    float    current_draw;
+    float    charge_current;
+    uint32_t uptime_sec;
+} SOH_t;
+
+typedef enum {
+    STATE_RISE          = 0,
+    STATE_STARTUP       = 1,
+    STATE_SOH_CHECK     = 2,
+    STATE_DOWNLINK      = 3,
+    STATE_BEACON        = 4,
+    STATE_RECEIVE_CHILD = 5,
+    STATE_WHIMSICAL_ML  = 6,
+    STATE_FIX_IT        = 7,
+    STATE_CPU_HOT       = 8,
+    STATE_LOW_POWER     = 9,
+    STATE_CRASH         = 10,
+    STATE_COUNT         = 11
+} FlightState_t;
+
+typedef FlightState_t (*StateHandler_t)(void);
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -49,6 +73,9 @@ RTC_HandleTypeDef hrtc;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* USER CODE BEGIN PV */
+
+static FlightState_t g_current_state = STATE_RISE;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,10 +87,118 @@ static void MX_RTC_Init(void);
 static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 
+static FlightState_t state_rise(void);
+static FlightState_t state_startup(void);
+static FlightState_t state_soh_check(void);
+static FlightState_t state_downlink(void);
+static FlightState_t state_beacon(void);
+static FlightState_t state_receive_child(void);
+static FlightState_t state_whimsical_ml(void);
+static FlightState_t state_fix_it(void);
+static FlightState_t state_cpu_hot(void);
+static FlightState_t state_low_power(void);
+static FlightState_t state_crash(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+static const StateHandler_t state_table[STATE_COUNT] = {
+    [STATE_RISE]          = state_rise,
+    [STATE_STARTUP]       = state_startup,
+    [STATE_SOH_CHECK]     = state_soh_check,
+    [STATE_DOWNLINK]      = state_downlink,
+    [STATE_BEACON]        = state_beacon,
+    [STATE_RECEIVE_CHILD] = state_receive_child,
+    [STATE_WHIMSICAL_ML]  = state_whimsical_ml,
+    [STATE_FIX_IT]        = state_fix_it,
+    [STATE_CPU_HOT]       = state_cpu_hot,
+    [STATE_LOW_POWER]     = state_low_power,
+    [STATE_CRASH]         = state_crash,
+};
+
+static FlightState_t state_rise(void)
+{
+    printf("[RISE] Booting\r\n");
+    HAL_Delay(500);
+    return STATE_STARTUP;
+}
+
+static FlightState_t state_startup(void)
+{
+    printf("[STARTUP] Turning everything on\r\n");
+    // TODO: enable radio, sensors
+    return STATE_SOH_CHECK;
+}
+
+static FlightState_t state_soh_check(void)
+{
+    printf("[SOH_CHECK] Checking health\r\n");
+    // TODO: read real sensors
+    // For now always pass
+    int all_good = 1;
+    if (all_good)
+        return STATE_DOWNLINK;
+    else
+        return STATE_FIX_IT;
+}
+
+static FlightState_t state_downlink(void)
+{
+    printf("[DOWNLINK] Sending child SDH + data\r\n");
+    // TODO: transmit over radio
+    return STATE_BEACON;
+}
+
+static FlightState_t state_beacon(void)
+{
+    printf("[BEACON] Sending callsign\r\n");
+    // TODO: transmit beacon over radio
+    return STATE_RECEIVE_CHILD;
+}
+
+static FlightState_t state_receive_child(void)
+{
+    printf("[RECEIVE_CHILD] Polling child qube over CAN\r\n");
+    // TODO: CAN poll to child
+    return STATE_WHIMSICAL_ML;
+}
+
+static FlightState_t state_whimsical_ml(void)
+{
+    printf("[WHIMSICAL_ML] Handshake with child qube\r\n");
+    // TODO: ML inference on payload data
+    return STATE_SOH_CHECK;
+}
+
+static FlightState_t state_fix_it(void)
+{
+    printf("[FIX_IT] Something is wrong\r\n");
+    // TODO: check what failed — cpu hot or low power
+    return STATE_LOW_POWER;
+}
+
+static FlightState_t state_cpu_hot(void)
+{
+    printf("[CPU_HOT] Too hot, waiting to cool\r\n");
+    HAL_Delay(500); // TODO: replace with real 10 min sleep
+    return STATE_SOH_CHECK;
+}
+
+static FlightState_t state_low_power(void)
+{
+    printf("[LOW_POWER] Low battery, waiting to recharge\r\n");
+    HAL_Delay(500); // TODO: replace with real 10 min sleep
+    return STATE_SOH_CHECK;
+}
+
+static FlightState_t state_crash(void)
+{
+    printf("[CRASH] Waiting for watchdog reset\r\n");
+    while (1) {} // do NOT refresh watchdog here
+    return STATE_CRASH;
+}
 
 /* USER CODE END 0 */
 
@@ -102,22 +237,24 @@ int main(void)
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
+  g_current_state = STATE_RISE;
+  printf("[BOOT] Parent Qube starting\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int count = 1;
   while (1)
   {
     /* USER CODE END WHILE */
-	  HAL_Delay(300);  // because (1/32000)*128*100 so max ~400ms
-	  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-	  if (HAL_IWDG_Refresh(&hiwdg) != HAL_OK)
-	  {
-		  Error_Handler();
-	  }
-	  printf("Hello world!! %d \n\r", count);
-	  count = count + 1;
+
+    HAL_IWDG_Refresh(&hiwdg);
+
+    if (g_current_state >= STATE_COUNT)
+        g_current_state = STATE_CRASH;
+
+    g_current_state = state_table[g_current_state]();
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -424,6 +561,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc) {
   RTC_AlarmTypeDef sAlarm;
   HAL_RTC_GetAlarm(hrtc,&sAlarm,RTC_ALARM_A,FORMAT_BIN);
@@ -435,6 +573,7 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc) {
     while(HAL_RTC_SetAlarm_IT(hrtc, &sAlarm, FORMAT_BIN)!=HAL_OK){}
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);
 }
+
 /* USER CODE END 4 */
 
 /**
