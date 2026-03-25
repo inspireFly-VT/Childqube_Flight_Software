@@ -37,18 +37,23 @@ typedef struct {
 } SOH_t;
 
 typedef enum {
-    STATE_RISE          = 0,
-    STATE_STARTUP       = 1,
-    STATE_SOH_CHECK     = 2,
-    STATE_DOWNLINK      = 3,
-    STATE_BEACON        = 4,
-    STATE_RECEIVE_CHILD = 5,
-    STATE_WHIMSICAL_ML  = 6,
-    STATE_FIX_IT        = 7,
-    STATE_CPU_HOT       = 8,
-    STATE_LOW_POWER     = 9,
-    STATE_CRASH         = 10,
-    STATE_COUNT         = 11
+    SOH_OK = 0,
+    SOH_ERR_TEMP,
+    SOH_ERR_VOLTAGE
+} SOH_Status_t;
+
+typedef enum {
+    STATE_RISE,
+    STATE_STARTUP,
+    STATE_SOH_INITIAL,
+    STATE_FIX_IT,
+    STATE_CPU_HOT,
+    STATE_LOW_POWER,
+    STATE_RECEIVE_PAYLOAD,
+    STATE_HANDSHAKE,
+    STATE_COMM_MODE,
+    STATE_CRASH,
+    STATE_COUNT
 } FlightState_t;
 
 typedef FlightState_t (*StateHandler_t)(void);
@@ -73,19 +78,23 @@ RTC_HandleTypeDef hrtc;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* USER CODE BEGIN PV */
-
 static FlightState_t g_current_state = STATE_RISE;
+static SOH_t         g_soh;
+static uint8_t       g_payload_buf[64];
 
+volatile uint32_t    g_sleep_ticks   = 0;
+volatile uint8_t     g_sleep_done    = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_LPUART1_UART_Init(void);
-static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_RTC_Init(void);
 static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
+
+
 
 static FlightState_t state_rise(void);
 static FlightState_t state_startup(void);
@@ -99,105 +108,153 @@ static FlightState_t state_cpu_hot(void);
 static FlightState_t state_low_power(void);
 static FlightState_t state_crash(void);
 
+
+static void         getSOH(SOH_t *soh);
+static void         gatherSOH(void);
+static SOH_Status_t checkSOH(SOH_t *soh);
+static void         collectData(void);
+static void         writeToPayload(void);
+static void         enter_stop_mode(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
 static const StateHandler_t state_table[STATE_COUNT] = {
-    [STATE_RISE]          = state_rise,
-    [STATE_STARTUP]       = state_startup,
-    [STATE_SOH_CHECK]     = state_soh_check,
-    [STATE_DOWNLINK]      = state_downlink,
-    [STATE_BEACON]        = state_beacon,
-    [STATE_RECEIVE_CHILD] = state_receive_child,
-    [STATE_WHIMSICAL_ML]  = state_whimsical_ml,
-    [STATE_FIX_IT]        = state_fix_it,
-    [STATE_CPU_HOT]       = state_cpu_hot,
-    [STATE_LOW_POWER]     = state_low_power,
-    [STATE_CRASH]         = state_crash,
+    [STATE_RISE]            = state_rise,
+    [STATE_STARTUP]         = state_startup,
+    [STATE_SOH_INITIAL]     = state_soh_initial,
+    [STATE_FIX_IT]          = state_fix_it,
+    [STATE_CPU_HOT]         = state_cpu_hot,
+    [STATE_LOW_POWER]       = state_low_power,
+    [STATE_RECEIVE_PAYLOAD] = state_receive_payload,
+    [STATE_HANDSHAKE]       = state_handshake,
+    [STATE_COMM_MODE]       = state_comm_mode,
+    [STATE_CRASH]           = state_crash
 };
 
-static FlightState_t state_rise(void)
-{
-    printf("[RISE] Booting\r\n");
-    HAL_Delay(500);
+
+static FlightState_t state_rise(void) {
+    /* "just wait" */
+    printf("[STATE] RISE: Power stabilization wait...\r\n");
+    for(int i = 0; i < 20; i++) {
+        HAL_Delay(100);
+        HAL_IWDG_Refresh(&hiwdg);
+    }
     return STATE_STARTUP;
 }
 
-static FlightState_t state_startup(void)
-{
-    printf("[STARTUP] Turning everything on\r\n");
-    // TODO: enable radio, sensors
-    return STATE_SOH_CHECK;
+static FlightState_t state_startup(void) {
+    /* "im not really sure" - Keeping it as a bridge for now */
+    printf("[STATE] STARTUP: System calibration...\r\n");
+    return STATE_SOH_INITIAL;
 }
 
-static FlightState_t state_soh_check(void)
-{
-    printf("[SOH_CHECK] Checking health\r\n");
-    // TODO: read real sensors
-    // For now always pass
-    int all_good = 1;
-    if (all_good)
-        return STATE_DOWNLINK;
-    else
+static FlightState_t state_soh_initial(void) {
+    printf("[STATE] SOH_INITIAL: Checking health...\r\n");
+
+    getSOH(&g_soh);    /* Stub: Fetches raw values */
+    gatherSOH();       /* Stub: Cannot do anything yet, just updates struct */
+
+    if (checkSOH(&g_soh) != SOH_OK) {
         return STATE_FIX_IT;
+    }
+
+    return STATE_RECEIVE_PAYLOAD;
 }
 
-static FlightState_t state_downlink(void)
-{
-    printf("[DOWNLINK] Sending child SDH + data\r\n");
-    // TODO: transmit over radio
-    return STATE_BEACON;
+static FlightState_t state_fix_it(void) {
+    printf("[STATE] FIX_IT: Routing recovery...\r\n");
+
+    SOH_Status_t status = checkSOH(&g_soh);
+
+    if (status == SOH_ERR_TEMP) {
+        return STATE_CPU_HOT;
+    }
+    else if (status == SOH_ERR_VOLTAGE) {
+        return STATE_LOW_POWER;
+    }
+
+    return STATE_SOH_INITIAL;
 }
 
-static FlightState_t state_beacon(void)
-{
-    printf("[BEACON] Sending callsign\r\n");
-    // TODO: transmit beacon over radio
-    return STATE_RECEIVE_CHILD;
+static FlightState_t state_cpu_hot(void) {
+    printf("[STATE] CPU_HOT: Entering cooling cycle...\r\n");
+    enter_stop_mode();
+    return STATE_SOH_INITIAL; /* "if these return good, move back to check soh" */
 }
 
-static FlightState_t state_receive_child(void)
-{
-    printf("[RECEIVE_CHILD] Polling child qube over CAN\r\n");
-    // TODO: CAN poll to child
-    return STATE_WHIMSICAL_ML;
+static FlightState_t state_low_power(void) {
+    printf("[STATE] LOW_POWER: Entering charge cycle...\r\n");
+    enter_stop_mode();
+    return STATE_SOH_INITIAL;
 }
 
-static FlightState_t state_whimsical_ml(void)
-{
-    printf("[WHIMSICAL_ML] Handshake with child qube\r\n");
-    // TODO: ML inference on payload data
-    return STATE_SOH_CHECK;
+static FlightState_t state_receive_payload(void) {
+    printf("[STATE] RECEIVE_PAYLOAD: Processing data...\r\n");
+    collectData();
+    writeToPayload();
+    return STATE_HANDSHAKE;
 }
 
-static FlightState_t state_fix_it(void)
-{
-    printf("[FIX_IT] Something is wrong\r\n");
-    // TODO: check what failed — cpu hot or low power
-    return STATE_LOW_POWER;
+static FlightState_t state_handshake(void) {
+    printf("[STATE] HANDSHAKE: Linking with Parent...\r\n");
+    HAL_Delay(500); // Handshake simulation
+    return STATE_COMM_MODE;
 }
 
-static FlightState_t state_cpu_hot(void)
-{
-    printf("[CPU_HOT] Too hot, waiting to cool\r\n");
-    HAL_Delay(500); // TODO: replace with real 10 min sleep
-    return STATE_SOH_CHECK;
+static FlightState_t state_comm_mode(void) {
+    printf("[STATE] COMM_MODE: Radio TX...\r\n");
+    HAL_Delay(1000);
+    return STATE_SOH_INITIAL;
 }
 
-static FlightState_t state_low_power(void)
-{
-    printf("[LOW_POWER] Low battery, waiting to recharge\r\n");
-    HAL_Delay(500); // TODO: replace with real 10 min sleep
-    return STATE_SOH_CHECK;
+static FlightState_t state_crash(void) {
+    while(1); /* Let Watchdog reset the system */
 }
 
-static FlightState_t state_crash(void)
-{
-    printf("[CRASH] Waiting for watchdog reset\r\n");
-    while (1) {} // do NOT refresh watchdog here
-    return STATE_CRASH;
+/* --- Helper Implementations --- */
+
+static void getSOH(SOH_t *soh) {
+    // Stub: In reality, you'd read ADC values here
+    soh->uptime_sec = HAL_GetTick() / 1000;
+}
+
+static void gatherSOH(void) {
+    // Stub: Logic placeholder for "cannot do anything about it right now"
+}
+
+static SOH_Status_t checkSOH(SOH_t *soh) {
+    if (soh->cpu_temperature > SOH_TEMP_HOT) return SOH_ERR_TEMP;
+    if (soh->battery_voltage < SOH_VBAT_LOW) return SOH_ERR_VOLTAGE;
+    return SOH_OK;
+}
+
+static void collectData(void) {
+    // Stub: Logic to pull from sensor buffer
+}
+
+static void writeToPayload(void) {
+    // Stub: Logic to format and store the packet
+}
+
+static void enter_stop_mode(void) {
+    g_sleep_ticks = 0;
+    g_sleep_done  = 0;
+    while (!g_sleep_done) {
+        HAL_IWDG_Refresh(&hiwdg);
+        HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    }
+    SystemClock_Config(); // Restore clock speed after waking up
+}
+
+int _write(int file, char *ptr, int len) {
+    int i = 0;
+    for (i = 0; i < len; i++) {
+        ITM_SendChar((*ptr++));
+    }
+    return len;
 }
 
 /* USER CODE END 0 */
@@ -238,7 +295,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   g_current_state = STATE_RISE;
-  printf("[BOOT] Parent Qube starting\r\n");
+  printf("\r\n[BOOT] Child Qube Flight Software Online\r\n");
 
   /* USER CODE END 2 */
 
@@ -263,6 +320,7 @@ int main(void)
 /**
   * @brief System Clock Configuration
   * @retval None
+  *
   */
 void SystemClock_Config(void)
 {
